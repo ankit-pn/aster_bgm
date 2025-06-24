@@ -35,8 +35,9 @@ MIN_SILENCE_LEN  = 1500     # ms
 SILENCE_THRESH   = -45      # dB
 KEEP_SILENCE     = 500      # ms
 NON_MUSIC_THRESH = 0.02     # fraction of max amplitude
-# Optional cookies file for authenticated YouTube downloads
-COOKIES_FILE     = os.path.join(os.path.dirname(__file__), "cookies.json")
+# Optional cookies files for authenticated YouTube downloads
+COOKIES_JSON = os.path.join(os.path.dirname(__file__), "cookies.json")
+COOKIES_TXT  = os.path.join(os.path.dirname(__file__), "cookies.txt")
 # ─────────────────────────────────────────────────────────────────────────
 
 # ─── LOGGING SETUP ──────────────────────────────────────────────────────
@@ -54,14 +55,39 @@ def run(cmd: list[str], **kw):
     logger.debug(f"Running command: {' '.join(cmd)}")
     subprocess.run(cmd, check=True, **kw)
 
+def convert_json_cookies(json_path: str, txt_path: str) -> str:
+    """Convert a Chrome/Firefox JSON cookies export to Netscape format."""
+    logger.info("Converting JSON cookies → Netscape format")
+    with open(json_path, "r") as f:
+        data = json.load(f)
+    cookies = data.get("cookies", data)
+    lines = ["# Netscape HTTP Cookie File"]
+    for c in cookies:
+        domain = c.get("domain", "")
+        flag = "FALSE" if c.get("hostOnly") else "TRUE"
+        path = c.get("path", "/")
+        secure = "TRUE" if c.get("secure") else "FALSE"
+        expiry = str(int(c.get("expirationDate", 0)))
+        name = c.get("name", "")
+        value = c.get("value", "")
+        lines.append("\t".join([domain, flag, path, secure, expiry, name, value]))
+    with open(txt_path, "w") as f:
+        f.write("\n".join(lines) + "\n")
+    return txt_path
+
 def download_wav(url: str, tmp: str) -> str:
     webm = os.path.join(tmp, "audio.webm")
     wav  = os.path.join(tmp, "audio.wav")
     logger.info(f"Downloading audio for URL: {url}")
     cmd = ["yt-dlp", "-f", "bestaudio"]
-    if os.path.exists(COOKIES_FILE):
-        logger.debug(f"Using cookies from {COOKIES_FILE}")
-        cmd += ["--cookies", COOKIES_FILE]
+    cookies_file = None
+    if os.path.exists(COOKIES_TXT):
+        cookies_file = COOKIES_TXT
+    elif os.path.exists(COOKIES_JSON):
+        cookies_file = convert_json_cookies(COOKIES_JSON, COOKIES_TXT)
+    if cookies_file:
+        logger.debug(f"Using cookies from {cookies_file}")
+        cmd += ["--cookies", cookies_file]
     cmd += ["-o", webm, url]
     run(cmd)
     logger.debug(f"Downloaded to {webm}, converting to {wav}")
