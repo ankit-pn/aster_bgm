@@ -35,6 +35,8 @@ MIN_SILENCE_LEN  = 1500     # ms
 SILENCE_THRESH   = -45      # dB
 KEEP_SILENCE     = 500      # ms
 NON_MUSIC_THRESH = 0.02     # fraction of max amplitude
+# Optional cookies file for authenticated YouTube downloads
+COOKIES_FILE     = os.path.join(os.path.dirname(__file__), "cookies.json")
 # ─────────────────────────────────────────────────────────────────────────
 
 # ─── LOGGING SETUP ──────────────────────────────────────────────────────
@@ -56,7 +58,12 @@ def download_wav(url: str, tmp: str) -> str:
     webm = os.path.join(tmp, "audio.webm")
     wav  = os.path.join(tmp, "audio.wav")
     logger.info(f"Downloading audio for URL: {url}")
-    run(["yt-dlp", "-f", "bestaudio", "-o", webm, url])
+    cmd = ["yt-dlp", "-f", "bestaudio"]
+    if os.path.exists(COOKIES_FILE):
+        logger.debug(f"Using cookies from {COOKIES_FILE}")
+        cmd += ["--cookies", COOKIES_FILE]
+    cmd += ["-o", webm, url]
+    run(cmd)
     logger.debug(f"Downloaded to {webm}, converting to {wav}")
     run([
         "ffmpeg", "-y", "-i", webm,
